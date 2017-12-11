@@ -1,0 +1,150 @@
+# =====================================================
+#  问题：1.empChurn函数运行有问题
+#        2.感觉active learning停止的具体数值不太好确定
+# =====================================================
+load("F:/科研/基于主动学习的抽样方法及其在流失预测中应用/UCI.RData")
+
+set.seed(1234)
+df<-sample(nrow(Churn.data),0.7*nrow(Churn.data))
+df.train<-Churn.data[df,]
+df.test<-Churn.data[-df,]
+
+library(e1071)
+fit.svm<-svm(class~.,data=df.test)
+prob<-predict(fit.svm,na.omit(df.test),type="prob")
+library(EMP)
+emp<-empChurn(scores=prob,classes=df.test$class)
+
+
+# =======================
+#  packages will be used
+# =======================
+
+library(e1071)
+library(caret)
+library(DMwR)
+library(EMP)
+
+# ==========================
+#  active learning function 
+# ==========================
+
+activelearing<-function(data)
+{
+  a<-sample(nrow(data),0.1*nrow(data))
+  begin<-data[a,]
+  remain<-data[-a,]
+  
+  i<-10
+  svm.update<-0
+  nsv.update<-0
+  while(i>0) 
+  {
+    nsv.now<-nsv.update;
+    svm.now<-svm.update;
+    
+    fit.svm<-svm(class~.,data=begin);
+    nsv<-c(fit.svm$nSV);
+    nsv.now<-nsv[1]+nsv[2];
+    svm.now<-fit.svm;
+    
+    dist<-predict(fit.svm,na.omit(remain),decision.values=TRUE);
+    remain.dist<- cbind(remain,dist);
+    remin.ordered<-remain.dist[order(remain.dist$dist),];
+    selected<-remin.ordered[1:5,c(1:19)];
+    begin<-rbind(selected,begin);
+    remain<-remin.ordered[-(1:5),c(1:19)];
+    
+    fit.svm<-svm(class~.,data=begin);
+    nsv<-c(fit.svm$nSV);
+    nsv.update<-nsv[1]+nsv[2];
+    svm.update<-fit.svm;
+    
+    i<-abs(nsv.update-nsv.now);
+  }  
+  return(svm<-svm.now)
+}
+
+# =====================
+#  upsampling function 
+# =====================
+
+upsampled<-function(data)
+{
+  predictor<-names(data)[names(data)!="class"]
+  upsampled<-upSample(x=data[,predictor],y=data$class,yname = "class")
+  fit.svm<-svm(class~.,data=upsampled)
+  return(svm<-fit.svm)
+}
+
+# =======================
+#  downsampling function 
+# =======================
+
+downsampled<-function(data)
+{
+  predictor<-names(data)[names(data)!="class"]
+  downSampled<-downSample(x=data[,predictor],y=data$class,yname = "class")
+  fit.svm<-svm(class~.,data=downsampled)
+  return(svm<-fit.svm)
+}
+ 
+# ================
+#  smote function 
+# ================
+
+smote<-function(data)
+{
+  smote<-SMOTE(class~.,data=data)
+  fit.svm<-svm(class~.,data=smote)
+  return(svm<-fit.svm)
+}
+
+# ===========================
+#  cross validation function 
+# ===========================
+  
+crossvalidation<- function(data)
+{
+  result<-list()
+  
+  for (i in 1:5)
+  {
+    id<-sample(nrow(data),0.5*nrow(data))
+    fold.1<-data[id, ]
+    fold.2<-data[-id, ]
+  
+    svm.activelearning.1<-activelearing(fold.1)
+    result.activelearning.1<-predict(svm.activelearning.1,na.omit(fold.2),type="prob")
+
+    svm.2<-activelearing(fold.2)
+    result.activelearning.2<-predict(svm.activelearning.2,na.omit(fold.1),type="prob")
+    
+    svm.upsample.1<-upsampled(fold.1)
+    result.upsample.1<-predict(svm.upsample.1,na.omit(fold.2),type="prob")
+    
+    svm.upsample.2<-upsampled(fold.2)
+    result.upsample.2<-predict(svm.upsample.2,na.omit(fold.1),type="prob")
+    
+    svm.downsample.1<-downsampled(fold.1)
+    result.downsample.1<-predict(svm.downsample.1,na.omit(fold.2),type="prob")
+    
+    svm.downsample.2<-downsampled(fold.2)
+    result.downsample.2<-predict(svm.downsample.2,na.omit(fold.1),type="prob")
+    
+    svm.smote.1<-smote(fold.1)
+    result.smote.1<-predict(svm.smote.1,na.omit(fold.2),type="prob")
+    
+    svm.smote.2<-smote(fold.2)
+    result.smote.2<-predict(svm.smote.2,na.omit(fold.1),type="prob")
+    # ==============================================
+    #  由于empChurn遇到的问题，所以返回的结果没写好
+    # ==============================================  
+    result[[i]]<-list(fold.1.trainscore=train.1,
+                      fold.1.testscore=test.2,
+                      fold.2.trainscore=train.2,
+                      fold.2.testscore=test.1)
+             
+  }
+    return(result)
+}
