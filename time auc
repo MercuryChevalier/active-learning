@@ -1,0 +1,53 @@
+load("F:/科研/基于主动学习的抽样方法及其在流失预测中应用/UCI.RData")
+
+df<-sample(nrow(Churn.data),0.5*nrow(Churn.data))
+df.train<-Churn.data[df,]
+df.test<-Churn.data[-df,]
+
+id<-sample(nrow(df.train),0.1*nrow(df.train))
+begin<-df.train[id,]
+remain<-df.train[-id,]
+
+i<-1
+a<-0
+time<-c()
+auc<-c()
+
+library(e1071)
+library(pROC)
+
+for (i in 1:50)
+{ 
+  fit.svm<-svm(TARGET~.,data=begin,probability=TRUE)
+  a<-a+1
+  time[a]<-a
+  
+  pre<-predict(fit.svm,na.omit(df.test),probability=TRUE)
+  prob<-attr(pre,"probabilities")
+  
+  roc<-roc(df.test$TARGET,prob[,2])
+  auc[a]<-roc$auc
+  
+  d<-sample(nrow(remain),59)
+  query<-remain[d,]
+  left<-remain[-d,]
+  
+  dist<-predict(fit.svm,na.omit(query),decision.values=TRUE)
+  dist<-attr(dist,"decision.values")
+  dist<-abs(dist[,1])
+  query.dist<- cbind(query,dist)
+  query.ordered<-query.dist[order(query.dist$dist),]
+  
+  selected<-query.ordered[1:10,c(1:10)]
+  query.left<-query.ordered[-c(1:10),c(1:10)]
+  
+  begin<-rbind(selected,begin)
+  remain<-rbind(left,query.left)
+  
+}
+
+mydata<-data.frame(time=time,auc=auc)
+plot(mydata$time,mydata$auc)
+save(mydata,file="F:/科研/基于主动学习的抽样方法及其在流失预测中应用/time auc.RData") 
+
+

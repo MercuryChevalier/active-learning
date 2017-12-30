@@ -1,3 +1,4 @@
+
 # =====================================================
 #  问题：1.empChurn函数运行有问题
 #        2.感觉active learning停止的具体数值不太好确定
@@ -10,11 +11,11 @@ df.train<-Churn.data[df,]
 df.test<-Churn.data[-df,]
 
 library(e1071)
-fit.svm<-svm(class~.,data=df.test)
-prob<-predict(fit.svm,na.omit(df.test),type="prob")
+fit.svm<-svm(class~.,data=df.test, probability= TRUE)
+pred<-predict(fit.svm,df.test, probability= TRUE)
 library(EMP)
-emp<-empChurn(scores=prob,classes=df.test$class)
-
+prob <- attr(pred, "probabilities")
+emp<-empChurn(scores=prob[,2],classes=df.test$class)
 
 # =======================
 #  packages will be used
@@ -45,7 +46,7 @@ activelearing<-function(data)
     
     fit.svm<-svm(class~.,data=begin);
     nsv<-c(fit.svm$nSV);
-    nsv.now<-nsv[1]+nsv[2];
+    nsv.now<-nsv[1]+nsv[2]; #没有初始化nsv
     svm.now<-fit.svm;
     
     dist<-predict(fit.svm,na.omit(remain),decision.values=TRUE);
@@ -148,3 +149,19 @@ crossvalidation<- function(data)
   }
     return(result)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
